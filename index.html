@@ -34,6 +34,7 @@ button.primary:active{background:var(--accent2)}
 button.ghost{background:transparent;min-height:36px;padding:6px 12px;font-size:14px}
 button.sm{min-height:42px;padding:6px 10px;font-size:14px}
 button.ic{min-width:44px;padding:6px 8px;font-size:18px;line-height:1}
+.warn{color:#ffb454}
 .tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 button.on{background:var(--accent-soft);border-color:var(--accent);color:#fff}
 button:disabled{opacity:.45;pointer-events:none}
@@ -150,6 +151,19 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
     </div>
 
     <div class="card">
+      <h2>Громкость</h2>
+      <div class="fade">
+        <input type="range" id="vol" min="-20" max="30" step="0.5" value="0" aria-label="Громкость, дБ">
+        <span class="v" id="volV" style="min-width:64px">0 дБ</span>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="sm grow" id="volReset">0 дБ</button>
+        <button class="sm grow" id="volNorm">Нормализовать</button>
+      </div>
+      <div id="volInfo" class="muted" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
       <h2>Сохранить как</h2>
       <div class="row">
         <div class="seg grow" id="fmtSeg">
@@ -186,7 +200,7 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
 'use strict';
 const $=id=>document.getElementById(id);
 const S={buf:null,mono:null,name:'',file:null,start:0,end:0,vs:0,vd:1,ph:0,mode:'keep',loop:false,
-  fmt:'mp3',fadeIn:0,fadeOut:0,ctx:null,nodes:[],gain:null,t0:0,off:0,sg:[],total:0,playing:false,raf:0,
+  fmt:'mp3',fadeIn:0,fadeOut:0,volDb:0,volNode:null,peak:null,ctx:null,nodes:[],gain:null,t0:0,off:0,sg:[],total:0,playing:false,raf:0,
   resUrl:null,resFile:null};
 const cv=$('cv');
 const MIN_SEL=0.01;
@@ -251,7 +265,9 @@ async function loadFile(f){
     $('finfo').textContent=fmtDur(buf.duration)+' · '+buf.sampleRate+' Гц · '+(chn===1?'моно':chn===2?'стерео':chn+' кан.')+' · '+fmtSize(f.size);
     $('empty').hidden=true;$('editor').hidden=false;$('btnNew').hidden=false;
     msg('');
+    S.volDb=0;S.peak=null;$('vol').value=0;
     updateUI();
+    updateVol(true);
   }catch(e){
     msg('Не удалось прочитать файл. Возможно, формат не поддерживается этим браузером.',true);
   }
@@ -268,11 +284,44 @@ function segs(){
   return r;
 }
 function outLen(){return segs().reduce((a,s)=>a+s[1]-s[0],0);}
-function setStart(t){S.start=clamp(t,0,S.end-MIN_SEL);}
-function setEnd(t){S.end=clamp(t,S.start+MIN_SEL,S.buf.duration);}
+function setStart(t){S.start=clamp(t,0,S.end-MIN_SEL);S.peak=null;}
+function setEnd(t){S.end=clamp(t,S.start+MIN_SEL,S.buf.duration);S.peak=null;}
 function selChanged(){
   if(S.playing){const p=S.ph;play(p);}
   updateUI();
+  updateVol(true);
+}
+
+/* ---------- громкость ---------- */
+const dbToGain=db=>Math.pow(10,db/20);
+function selPeak(){
+  const b=S.buf,sr=b.sampleRate;
+  let p=0;
+  for(const s of segs()){
+    const a=Math.floor(s[0]*sr),z=Math.min(b.length,Math.floor(s[1]*sr));
+    for(let c=0;c<b.numberOfChannels;c++){
+      const d=b.getChannelData(c);
+      for(let i=a;i<z;i++){const v=d[i]<0?-d[i]:d[i];if(v>p)p=v;}
+    }
+  }
+  return p;
+}
+function updateVol(recalc){
+  if(!S.buf)return;
+  const db=S.volDb;
+  $('volV').textContent=(db>0?'+':'')+db.toFixed(1).replace('.0','')+' дБ';
+  if(recalc||S.peak==null)S.peak=selPeak();
+  const el=$('volInfo');
+  const p=S.peak*dbToGain(db);
+  if(S.peak<=0.00001){el.textContent='В выделении тишина.';el.className='muted';return;}
+  const pdb=20*Math.log10(p);
+  if(p>1){
+    el.textContent='Пик после усиления: +'+pdb.toFixed(1)+' дБ. Перегруз: звук будет обрезан и захрипит. Убавь громкость или нажми «Нормализовать».';
+    el.className='warn';
+  }else{
+    el.textContent='Пик после усиления: '+pdb.toFixed(1)+' дБ (0 дБ — максимум без искажений)';
+    el.className='muted';
+  }
 }
 
 /* ---------- вид волны ---------- */
@@ -382,6 +431,7 @@ function endDrag(e){
     updateUI();
   }else if(d.kind!=='bg'){
     if(S.playing)play(S.ph);
+    updateVol(true);
   }
 }
 cv.addEventListener('pointerup',endDrag);
@@ -400,6 +450,7 @@ function teardown(){
   S.nodes.forEach(n=>{try{n.onended=null;n.stop();}catch(e){}try{n.disconnect();}catch(e){}});
   S.nodes=[];
   if(S.gain){try{S.gain.disconnect();}catch(e){}S.gain=null;}
+  if(S.volNode){try{S.volNode.disconnect();}catch(e){}S.volNode=null;}
 }
 function play(fromTime){
   if(!S.buf)return;
@@ -416,8 +467,12 @@ function play(fromTime){
     acc+=s[1]-s[0];
   }
   if(off>total-0.05)off=0;
+  const volNode=ctx.createGain();
+  volNode.gain.value=dbToGain(S.volDb);
+  volNode.connect(ctx.destination);
   const gain=ctx.createGain();
-  gain.connect(ctx.destination);
+  gain.connect(volNode);
+  S.volNode=volNode;
   const t0=ctx.currentTime+0.05;
   const fi=Math.min(S.fadeIn,total/2),fo=Math.min(S.fadeOut,total/2);
   let g0=1;
@@ -503,6 +558,8 @@ function renderChannels(){
     for(let i=0;i<fi;i++)out[i]*=i/fi;
     for(let i=0;i<fo;i++)out[n-1-i]*=i/fo;
   }
+  const gv=dbToGain(S.volDb);
+  if(gv!==1)for(const out of chs)for(let i=0;i<n;i++)out[i]*=gv;
   return{chs,sr,n};
 }
 function encodeWav(chs,sr){
@@ -679,6 +736,26 @@ function bindFade(id,key,vid){
 }
 bindFade('fadeIn','fadeIn','fadeInV');
 bindFade('fadeOut','fadeOut','fadeOutV');
+
+$('vol').addEventListener('input',e=>{
+  S.volDb=parseFloat(e.target.value);
+  if(S.volNode)S.volNode.gain.value=dbToGain(S.volDb);
+  updateVol(false);
+});
+$('volReset').addEventListener('click',()=>{
+  S.volDb=0;$('vol').value=0;
+  if(S.volNode)S.volNode.gain.value=1;
+  updateVol(false);
+});
+$('volNorm').addEventListener('click',()=>{
+  if(!S.buf)return;
+  S.peak=selPeak();
+  if(S.peak<=0.00001)return;
+  const db=clamp(Math.round((-1-20*Math.log10(S.peak))*2)/2,-20,30); // пик выделения до −1 дБ
+  S.volDb=db;$('vol').value=db;
+  if(S.volNode)S.volNode.gain.value=dbToGain(db);
+  updateVol(false);
+});
 
 function setFmt(f){
   S.fmt=f;
