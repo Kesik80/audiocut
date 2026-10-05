@@ -18,7 +18,7 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-body{padding:calc(env(safe-area-inset-top) + 10px) 12px calc(env(safe-area-inset-bottom) + 28px);max-width:720px;margin:0 auto}
+body{padding:calc(env(safe-area-inset-top) + 10px) max(12px,env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 28px) max(12px,env(safe-area-inset-left));max-width:720px;margin:0 auto}
 .top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 2px 12px}
 .top h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.2px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:12px}
@@ -68,6 +68,45 @@ audio{width:100%;margin:8px 0}
 a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:#fff;background:var(--ok);border-radius:12px;padding:10px 16px;min-height:44px;font-weight:600}
 h2{font-size:15px;margin:0 0 10px;font-weight:600}
 [hidden]{display:none!important}
+.kbd{display:none}
+.fade>span:not(.v){white-space:nowrap;min-width:0!important;flex:none}
+.fade input[type=range]{flex:1;min-width:0;width:auto}
+@media(max-width:420px){
+  .tools{gap:5px}
+  .tools button{padding:6px 7px;font-size:13px;min-width:0}
+  .tools button.ic{min-width:38px;font-size:17px}
+}
+
+/* ---- адаптивность: телефон (базовый) → планшет → ноутбук ---- */
+@media(min-width:600px){
+  body{max-width:760px}
+  .top h1{font-size:22px}
+  canvas{height:190px}
+  .drop{max-width:640px;margin:7vh auto 0}
+}
+@media(min-width:900px){
+  body{max-width:1120px}
+  .layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:0 16px;align-items:start}
+  canvas{height:240px}
+  .card{padding:16px}
+  .wavecard{padding:12px}
+}
+@media(min-width:900px) and (min-height:760px){
+  .layout>.col:first-child{position:sticky;top:10px}
+}
+@media(min-width:1400px){
+  body{max-width:1280px}
+  canvas{height:280px}
+}
+@media(max-height:480px) and (orientation:landscape){
+  canvas{height:110px}
+  .drop{margin-top:0;padding:20px 16px}
+}
+@media(hover:hover) and (pointer:fine){
+  button:hover{border-color:var(--accent)}
+  button.primary:hover{background:var(--accent2)}
+  .kbd{display:block}
+}
 </style>
 </head>
 <body>
@@ -91,6 +130,7 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
       <div id="finfo" class="muted"></div>
     </div>
 
+    <div class="layout"><div class="col">
     <div class="card wavecard">
       <canvas id="cv"></canvas>
       <input type="range" id="pan" min="0" max="1000" value="0" aria-label="Прокрутка">
@@ -104,6 +144,7 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
         <button class="sm" id="zAll">Всё</button>
       </div>
       <div class="muted" style="margin-top:8px;font-size:12px">Тап по волне ставит маркер воспроизведения. Синие ручки тянутся пальцем.</div>
+      <div class="muted kbd" style="margin-top:4px;font-size:12px">Пробел: пуск/пауза · I / O: начало/конец в маркере · ←/→: маркер ±1 с (Shift: ±0,1 с) · колесо: масштаб · Shift+колесо: прокрутка</div>
     </div>
 
     <div class="card">
@@ -132,6 +173,7 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
       </div>
     </div>
 
+    </div><div class="col">
     <div class="card">
       <h2>Что сделать с выделением</h2>
       <div class="seg">
@@ -192,6 +234,7 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
         <button id="resShare" hidden>Поделиться</button>
       </div>
     </div>
+    </div></div>
   </div>
 </main>
 
@@ -404,8 +447,9 @@ cv.addEventListener('pointerdown',e=>{
   const xs=tx(S.start,w),xe=tx(S.end,w);
   let kind='bg',hx=0;
   const ds=Math.abs(x-xs),de=Math.abs(x-xe);
-  if(Math.min(ds,de)<HIT){
-    if(Math.abs(xe-xs)<HIT)kind=x<(xs+xe)/2?'s':'e'; // ручки рядом: выбираем по стороне касания
+  const hit=e.pointerType==='mouse'?16:HIT; // мышь точнее пальца
+  if(Math.min(ds,de)<hit){
+    if(Math.abs(xe-xs)<hit)kind=x<(xs+xe)/2?'s':'e'; // ручки рядом: выбираем по стороне касания
     else kind=ds<=de?'s':'e';
     hx=(kind==='s'?xs:xe)-x; // смещение пальца от центра ручки, чтобы ручка не прыгала
   }
@@ -414,8 +458,14 @@ cv.addEventListener('pointerdown',e=>{
   e.preventDefault();
 });
 cv.addEventListener('pointermove',e=>{
-  if(!drag)return;
   const r=cv.getBoundingClientRect(),x=e.clientX-r.left,w=r.width;
+  if(!drag){
+    if(e.pointerType==='mouse'&&S.buf){ // курсор-подсказка над ручками
+      const near=Math.min(Math.abs(x-tx(S.start,w)),Math.abs(x-tx(S.end,w)))<16;
+      cv.style.cursor=near?'ew-resize':'pointer';
+    }
+    return;
+  }
   if(Math.abs(x-drag.x0)>5)drag.moved=true;
   if(drag.kind==='s'){setStart(xt(x+drag.hx,w));updateUI();}
   else if(drag.kind==='e'){setEnd(xt(x+drag.hx,w));updateUI();}
@@ -440,9 +490,38 @@ cv.addEventListener('wheel',e=>{
   if(!S.buf)return;
   e.preventDefault();
   const r=cv.getBoundingClientRect();
-  zoomBy(e.deltaY>0?1.25:0.8,xt(e.clientX-r.left,r.width));
+  if(e.shiftKey||Math.abs(e.deltaX)>Math.abs(e.deltaY)){ // прокрутка вдоль волны
+    const d=e.shiftKey&&!e.deltaX?e.deltaY:e.deltaX;
+    S.vs+=d/(r.width-2*PAD)*S.vd;
+    updateUI();
+    return;
+  }
+  zoomBy(Math.exp(clamp(e.deltaY,-100,100)*0.0035),xt(e.clientX-r.left,r.width));
 },{passive:false});
-window.addEventListener('resize',()=>{if(S.buf)draw();});
+if(window.ResizeObserver)new ResizeObserver(()=>{if(S.buf)draw();}).observe(cv);
+else window.addEventListener('resize',()=>{if(S.buf)draw();});
+
+/* клавиатура (ноутбук) */
+document.addEventListener('keydown',e=>{
+  if(!S.buf||e.ctrlKey||e.metaKey||e.altKey)return;
+  const t=e.target,tag=t&&t.tagName,type=t&&t.type;
+  if(tag==='SELECT'||tag==='TEXTAREA'||(tag==='INPUT'&&type==='text'))return;
+  if(e.code==='Space'){
+    if(tag==='BUTTON'||tag==='A')return; // пробел на кнопке нажимает её сам
+    e.preventDefault();
+    if(S.playing)pause();else play();
+  }else if(e.key==='i'||e.key==='I'||e.key==='ш'||e.key==='Ш'){
+    setStart(S.ph);selChanged();
+  }else if(e.key==='o'||e.key==='O'||e.key==='щ'||e.key==='Щ'){
+    setEnd(S.ph);selChanged();
+  }else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&!(tag==='INPUT'&&type==='range')){
+    e.preventDefault();
+    const d=(e.key==='ArrowLeft'?-1:1)*(e.shiftKey?0.1:1);
+    S.ph=clamp(S.ph+d,0,S.buf.duration);
+    if(S.playing)play(S.ph);
+    updateUI();
+  }
+});
 
 /* ---------- воспроизведение ---------- */
 function teardown(){
