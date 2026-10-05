@@ -71,6 +71,9 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
 .kbd{display:none}
 .fade>span:not(.v){white-space:nowrap;min-width:0!important;flex:none}
 .fade input[type=range]{flex:1;min-width:0;width:auto}
+@media(max-width:599px){
+  .tools button{flex:1 1 auto} /* кнопки заполняют всю строку ровно */
+}
 @media(max-width:420px){
   .tools{gap:5px}
   .tools button{padding:6px 7px;font-size:13px;min-width:0}
