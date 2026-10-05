@@ -32,7 +32,9 @@ button:active{transform:scale(.97)}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 button.primary:active{background:var(--accent2)}
 button.ghost{background:transparent;min-height:36px;padding:6px 12px;font-size:14px}
-button.sm{min-height:38px;padding:6px 10px;font-size:14px}
+button.sm{min-height:42px;padding:6px 10px;font-size:14px}
+button.ic{min-width:44px;padding:6px 8px;font-size:18px;line-height:1}
+.tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 button.on{background:var(--accent-soft);border-color:var(--accent);color:#fff}
 button:disabled{opacity:.45;pointer-events:none}
 .drop{border:2px dashed var(--line);border-radius:20px;padding:44px 16px;text-align:center;background:var(--card)}
@@ -91,23 +93,16 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
     <div class="card wavecard">
       <canvas id="cv"></canvas>
       <input type="range" id="pan" min="0" max="1000" value="0" aria-label="Прокрутка">
-      <div class="row between">
-        <span id="viewLbl" class="muted"></span>
-        <div class="row">
-          <button class="sm" id="zOut" aria-label="Отдалить">−</button>
-          <button class="sm" id="zIn" aria-label="Приблизить">+</button>
-          <button class="sm" id="zSel">Выделение</button>
-          <button class="sm" id="zAll">Всё</button>
-        </div>
+      <div id="viewLbl" class="muted" style="margin-bottom:8px"></div>
+      <div class="tools">
+        <button class="sm primary ic" id="btnPlay" aria-label="Слушать">▶</button>
+        <button class="sm ic" id="btnLoop" aria-label="Повтор">⟲</button>
+        <button class="sm" id="zOut" aria-label="Отдалить">−</button>
+        <button class="sm" id="zIn" aria-label="Приблизить">+</button>
+        <button class="sm" id="zSel">Выделение</button>
+        <button class="sm" id="zAll">Всё</button>
       </div>
-    </div>
-
-    <div class="card">
-      <div class="row">
-        <button id="btnPlay" class="primary grow">▶ Слушать</button>
-        <button id="btnLoop">⟲ Повтор</button>
-      </div>
-      <div class="muted" style="margin-top:8px">Тап по волне ставит маркер воспроизведения. Синие ручки тянутся пальцем.</div>
+      <div class="muted" style="margin-top:8px;font-size:12px">Тап по волне ставит маркер воспроизведения. Синие ручки тянутся пальцем.</div>
     </div>
 
     <div class="card">
@@ -195,6 +190,10 @@ const S={buf:null,mono:null,name:'',file:null,start:0,end:0,vs:0,vd:1,ph:0,mode:
   resUrl:null,resFile:null};
 const cv=$('cv');
 const MIN_SEL=0.01;
+const PAD=18; // отступ волны от краёв: ручки видны целиком и не попадают в зону системного жеста «назад»
+const HIT=34; // радиус захвата ручки пальцем, px
+const tx=(t,w)=>PAD+(t-S.vs)/S.vd*(w-2*PAD);
+const xt=(x,w)=>S.vs+(x-PAD)/(w-2*PAD)*S.vd;
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const pad2=n=>String(n).padStart(2,'0');
 
@@ -301,15 +300,15 @@ function draw(){
   g.clearRect(0,0,w,h);
   if(!S.buf)return;
   const sr=S.buf.sampleRate,mid=h/2,n=S.mono.length;
-  const X=t=>(t-S.vs)/S.vd*w;
+  const X=t=>tx(t,w);
   const xs=X(S.start),xe=X(S.end);
-  const a=Math.max(0,xs),b=Math.min(w,xe);
+  const a=Math.max(PAD,xs),b=Math.min(w-PAD,xe);
   g.fillStyle=S.mode==='keep'?'rgba(79,140,255,.20)':'rgba(255,93,108,.22)';
   if(b>a)g.fillRect(a,0,b-a,h);
   g.fillStyle='#9fb4d8';
-  const spp=S.vd*sr/w;
-  for(let px=0;px<w;px++){
-    const i0=Math.floor((S.vs+px/w*S.vd)*sr);
+  const spp=S.vd*sr/(w-2*PAD);
+  for(let px=PAD;px<w-PAD;px++){
+    const i0=Math.floor(xt(px,w)*sr);
     if(i0>=n)break;
     const i1=Math.min(n,Math.floor(i0+spp)+1);
     const step=Math.max(1,Math.floor((i1-i0)/48));
@@ -320,16 +319,16 @@ function draw(){
     g.fillRect(px,y1,1,Math.max(1,y2-y1));
   }
   g.fillStyle='rgba(255,255,255,.12)';
-  g.fillRect(0,mid,w,1);
+  g.fillRect(PAD,mid,w-2*PAD,1);
   const handle=(x,col)=>{
-    if(x<-20||x>w+20)return;
+    if(x<PAD-1||x>w-PAD+1)return;
     g.fillStyle=col;g.fillRect(x-1.5,0,3,h);
     g.beginPath();g.arc(x,h/2,11,0,Math.PI*2);g.fill();
     g.fillStyle='#fff';g.fillRect(x-4,h/2-5,2,10);g.fillRect(x+2,h/2-5,2,10);
   };
   handle(xs,'#4f8cff');handle(xe,'#4f8cff');
   const xp=X(S.ph);
-  if(xp>=0&&xp<=w){g.fillStyle='#fff';g.fillRect(xp-1,0,2,h);}
+  if(xp>=PAD-1&&xp<=w-PAD+1){g.fillStyle='#fff';g.fillRect(xp-1,0,2,h);}
 }
 function updateUI(){
   if(!S.buf)return;
@@ -353,29 +352,32 @@ let drag=null;
 cv.addEventListener('pointerdown',e=>{
   if(!S.buf)return;
   const r=cv.getBoundingClientRect(),x=e.clientX-r.left,w=r.width;
-  const xs=(S.start-S.vs)/S.vd*w,xe=(S.end-S.vs)/S.vd*w;
-  let kind='bg';
+  const xs=tx(S.start,w),xe=tx(S.end,w);
+  let kind='bg',hx=0;
   const ds=Math.abs(x-xs),de=Math.abs(x-xe);
-  if(Math.min(ds,de)<26)kind=ds<=de?'s':'e';
-  drag={kind,x0:x,vs0:S.vs,moved:false};
-  cv.setPointerCapture(e.pointerId);
+  if(Math.min(ds,de)<HIT){
+    if(Math.abs(xe-xs)<HIT)kind=x<(xs+xe)/2?'s':'e'; // ручки рядом: выбираем по стороне касания
+    else kind=ds<=de?'s':'e';
+    hx=(kind==='s'?xs:xe)-x; // смещение пальца от центра ручки, чтобы ручка не прыгала
+  }
+  drag={kind,x0:x,vs0:S.vs,hx,moved:false};
+  try{cv.setPointerCapture(e.pointerId);}catch(err){}
   e.preventDefault();
 });
 cv.addEventListener('pointermove',e=>{
   if(!drag)return;
   const r=cv.getBoundingClientRect(),x=e.clientX-r.left,w=r.width;
   if(Math.abs(x-drag.x0)>5)drag.moved=true;
-  const t=S.vs+x/w*S.vd;
-  if(drag.kind==='s'){setStart(t);updateUI();}
-  else if(drag.kind==='e'){setEnd(t);updateUI();}
-  else if(drag.moved){S.vs=drag.vs0-(x-drag.x0)/w*S.vd;updateUI();}
+  if(drag.kind==='s'){setStart(xt(x+drag.hx,w));updateUI();}
+  else if(drag.kind==='e'){setEnd(xt(x+drag.hx,w));updateUI();}
+  else if(drag.moved){S.vs=drag.vs0-(x-drag.x0)/(w-2*PAD)*S.vd;updateUI();}
 });
 function endDrag(e){
   if(!drag)return;
   const d=drag;drag=null;
   if(d.kind==='bg'&&!d.moved){
     const r=cv.getBoundingClientRect(),x=e.clientX-r.left;
-    S.ph=clamp(S.vs+x/r.width*S.vd,0,S.buf.duration);
+    S.ph=clamp(xt(x,r.width),0,S.buf.duration);
     if(S.playing)play(S.ph);
     updateUI();
   }else if(d.kind!=='bg'){
@@ -388,7 +390,7 @@ cv.addEventListener('wheel',e=>{
   if(!S.buf)return;
   e.preventDefault();
   const r=cv.getBoundingClientRect();
-  zoomBy(e.deltaY>0?1.25:0.8,S.vs+(e.clientX-r.left)/r.width*S.vd);
+  zoomBy(e.deltaY>0?1.25:0.8,xt(e.clientX-r.left,r.width));
 },{passive:false});
 window.addEventListener('resize',()=>{if(S.buf)draw();});
 
@@ -473,7 +475,11 @@ function stopAll(){
   teardown();S.playing=false;
   if(S.buf)setPlayBtn();
 }
-function setPlayBtn(){$('btnPlay').textContent=S.playing?'⏸ Пауза':'▶ Слушать';}
+function setPlayBtn(){
+  const b=$('btnPlay');
+  b.textContent=S.playing?'⏸':'▶';
+  b.setAttribute('aria-label',S.playing?'Пауза':'Слушать');
+}
 
 /* ---------- экспорт ---------- */
 function renderChannels(){
