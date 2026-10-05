@@ -69,6 +69,13 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 h2{font-size:15px;margin:0 0 10px;font-weight:600}
 [hidden]{display:none!important}
 .kbd{display:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card2)}
+.chip button{border:0;border-radius:0;min-height:38px;padding:4px 10px;font-size:13px;background:transparent}
+.chip button.x{border-left:1px solid var(--line);color:var(--muted)}
+details summary{cursor:pointer;color:var(--muted);font-size:14px;min-height:32px;display:flex;align-items:center}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 18px);transform:translate(-50%,20px);max-width:min(92vw,520px);background:#262b36;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:50}
+#toast.show{opacity:1;transform:translate(-50%,0)}
 .fade>span:not(.v){white-space:nowrap;min-width:0!important;flex:none}
 .fade input[type=range]{flex:1;min-width:0;width:auto}
 @media(max-width:599px){
@@ -93,9 +100,6 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
   canvas{height:240px}
   .card{padding:16px}
   .wavecard{padding:12px}
-}
-@media(min-width:900px) and (min-height:760px){
-  .layout>.col:first-child{position:sticky;top:10px}
 }
 @media(min-width:1400px){
   body{max-width:1280px}
@@ -146,8 +150,13 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
         <button class="sm" id="zSel">Выделение</button>
         <button class="sm" id="zAll">Всё</button>
       </div>
-      <div class="muted" style="margin-top:8px;font-size:12px">Тап по волне ставит маркер воспроизведения. Синие ручки тянутся пальцем.</div>
-      <div class="muted kbd" style="margin-top:4px;font-size:12px">Пробел: пуск/пауза · I / O: начало/конец в маркере · ←/→: маркер ±1 с (Shift: ±0,1 с) · колесо: масштаб · Shift+колесо: прокрутка</div>
+      <div class="tools" style="margin-top:6px">
+        <button class="sm ic" id="btnUndo" aria-label="Отменить" disabled>↶</button>
+        <button class="sm ic" id="btnRedo" aria-label="Вернуть" disabled>↷</button>
+        <button class="sm" id="btnMark">⚑ Маркер</button>
+      </div>
+      <div class="muted" style="margin-top:8px;font-size:12px">Тап по волне ставит маркер воспроизведения. Двумя пальцами: масштаб. Синие ручки и жёлтые флажки ⚑ тянутся пальцем.</div>
+      <div class="muted kbd" style="margin-top:4px;font-size:12px">Пробел: пуск/пауза · I / O: начало/конец в маркере · ←/→: маркер ±1 с (Shift: ±0,1 с) · M: флажок · Ctrl+Z / Ctrl+Shift+Z: отмена/возврат · колесо: масштаб · Shift+колесо: прокрутка</div>
     </div>
 
     <div class="card">
@@ -176,6 +185,32 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
       </div>
     </div>
 
+    <div class="card">
+      <h2>Разрезать на части</h2>
+      <div class="muted">Поставь флажки ⚑ там, где резать (кнопка «⚑ Маркер» или клавиша M), или найди паузы автоматически.</div>
+      <div class="row" style="margin-top:10px">
+        <button class="sm grow" id="btnFind">Найти паузы</button>
+        <button class="sm grow" id="btnTrimEdges">Подрезать тишину по краям</button>
+      </div>
+      <details style="margin-top:8px">
+        <summary>Настройки поиска пауз</summary>
+        <div class="fade">
+          <span>Порог тишины</span>
+          <input type="range" id="thr" min="15" max="50" step="1" value="30" aria-label="Порог тишины">
+          <span class="v" id="thrV" style="min-width:58px">−30 дБ</span>
+        </div>
+        <div class="fade">
+          <span>Мин. пауза</span>
+          <input type="range" id="minPause" min="0.1" max="2" step="0.05" value="0.4" aria-label="Минимальная пауза">
+          <span class="v" id="minPauseV" style="min-width:58px">0,4 с</span>
+        </div>
+      </details>
+      <div id="chips" class="chips"></div>
+      <div class="row between" style="margin-top:10px">
+        <span id="partsInfo" class="muted"></span>
+        <button class="ghost" id="btnClearMarks" hidden>Убрать все флажки</button>
+      </div>
+    </div>
     </div><div class="col">
     <div class="card">
       <h2>Что сделать с выделением</h2>
@@ -183,6 +218,8 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
         <button data-mode="keep" class="on">Оставить его</button>
         <button data-mode="cut">Вырезать его</button>
       </div>
+      <button class="sm" id="btnApply" style="width:100%;margin-top:10px">Применить и вырезать ещё</button>
+      <div class="muted" style="margin-top:6px;font-size:12px">Закрепляет результат на дорожке, и можно выделять следующий кусок. Вернуть: ↶.</div>
       <div class="fade" style="margin-top:14px">
         <span style="min-width:92px">Плавное начало</span>
         <input type="range" id="fadeIn" min="0" max="5" step="0.1" value="0">
@@ -210,8 +247,12 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
 
     <div class="card">
       <h2>Сохранить как</h2>
+      <div class="seg" style="margin-bottom:10px">
+        <button data-split="one" class="on">Одним файлом</button>
+        <button data-split="parts" id="splitParts" disabled>По частям (zip)</button>
+      </div>
       <div class="row">
-        <div class="seg grow" id="fmtSeg">
+        <div class="seg grow">
           <button data-fmt="mp3" class="on">MP3</button>
           <button data-fmt="wav">WAV</button>
         </div>
@@ -230,7 +271,7 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
 
     <div class="card" id="result" hidden>
       <h2>Готово</h2>
-      <div id="resInfo" class="muted"></div>
+      <div id="resInfo" class="muted" style="white-space:pre-line"></div>
       <audio id="resAudio" controls preload="metadata"></audio>
       <div class="row">
         <a id="resDl" class="btn" href="#" download>Скачать</a>
@@ -241,15 +282,19 @@ h2{font-size:15px;margin:0 0 10px;font-weight:600}
   </div>
 </main>
 
+<div id="toast" role="status" aria-live="polite"></div>
+
 <script>
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
 const S={buf:null,mono:null,name:'',file:null,start:0,end:0,vs:0,vd:1,ph:0,mode:'keep',loop:false,
   fmt:'mp3',fadeIn:0,fadeOut:0,volDb:0,volNode:null,peak:null,ctx:null,nodes:[],gain:null,t0:0,off:0,sg:[],total:0,playing:false,raf:0,
-  resUrl:null,resFile:null};
+  resUrl:null,resFile:null,
+  removed:[],marks:[],undo:[],redo:[],split:'one',levels:null,thr:30,minPause:0.4};
 const cv=$('cv');
 const MIN_SEL=0.01;
+const EPS=0.0005;
 const PAD=18; // отступ волны от краёв: ручки видны целиком и не попадают в зону системного жеста «назад»
 const HIT=34; // радиус захвата ручки пальцем, px
 const tx=(t,w)=>PAD+(t-S.vs)/S.vd*(w-2*PAD);
@@ -277,6 +322,11 @@ function parseT(str){
 function fmtDur(t){return t>=3600?Math.floor(t/3600)+':'+pad2(Math.floor(t%3600/60))+':'+pad2(Math.floor(t%60)):fmt(t);}
 function fmtSize(b){return b>1048576?(b/1048576).toFixed(1)+' МБ':Math.max(1,Math.round(b/1024))+' КБ';}
 function msg(t,err){const m=$('msg');m.textContent=t||'';m.className=err?'err':'';}
+let toastT=0;
+function toast(t){
+  const el=$('toast');el.textContent=t;el.classList.add('show');
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3400);
+}
 function store(k,v){try{localStorage.setItem('audiocut_'+k,v);}catch(e){}}
 function load(k){try{return localStorage.getItem('audiocut_'+k);}catch(e){return null;}}
 
@@ -284,6 +334,36 @@ function getCtx(){
   if(!S.ctx){const AC=window.AudioContext||window.webkitAudioContext;S.ctx=new AC();}
   return S.ctx;
 }
+
+/* ---------- диапазоны времени ---------- */
+function mergeRanges(r){
+  const a=r.filter(x=>x[1]-x[0]>EPS).map(x=>[x[0],x[1]]).sort((p,q)=>p[0]-q[0]);
+  const out=[];
+  for(const x of a){
+    const l=out[out.length-1];
+    if(l&&x[0]<=l[1]+EPS)l[1]=Math.max(l[1],x[1]);else out.push(x);
+  }
+  return out;
+}
+function subtractRange(ranges,a,b){
+  const out=[];
+  for(const r of ranges){
+    if(b<=r[0]||a>=r[1]){out.push(r);continue;}
+    if(a>r[0])out.push([r[0],a]);
+    if(b<r[1])out.push([b,r[1]]);
+  }
+  return out;
+}
+function intersectRange(ranges,a,b){
+  const out=[];
+  for(const r of ranges){
+    const s=Math.max(r[0],a),e=Math.min(r[1],b);
+    if(e-s>EPS)out.push([s,e]);
+  }
+  return out;
+}
+const sumLen=r=>r.reduce((t,x)=>t+x[1]-x[0],0);
+function inRemoved(t){return S.removed.some(r=>t>=r[0]&&t<=r[1]);}
 
 /* ---------- загрузка файла ---------- */
 async function loadFile(f){
@@ -307,13 +387,14 @@ async function loadFile(f){
     S.buf=buf;S.mono=mono;S.file=f;
     S.name=f.name.replace(/\.[^.]+$/,'')||'audio';
     S.start=0;S.end=buf.duration;S.ph=0;S.vs=0;S.vd=buf.duration;
+    S.removed=[];S.marks=[];S.undo=[];S.redo=[];S.levels=null;S.mode='keep';S.split='one';
+    syncMode();updateHist();
     $('fname').textContent=f.name;
     $('finfo').textContent=fmtDur(buf.duration)+' · '+buf.sampleRate+' Гц · '+(chn===1?'моно':chn===2?'стерео':chn+' кан.')+' · '+fmtSize(f.size);
     $('empty').hidden=true;$('editor').hidden=false;$('btnNew').hidden=false;
     msg('');
     S.volDb=0;S.peak=null;$('vol').value=0;
-    updateUI();
-    updateVol(true);
+    refresh();
   }catch(e){
     msg('Не удалось прочитать файл. Возможно, формат не поддерживается этим браузером.',true);
   }
@@ -323,19 +404,156 @@ async function loadFile(f){
 function segs(){
   if(!S.buf)return[];
   const d=S.buf.duration;
-  if(S.mode==='keep')return[[S.start,S.end]];
-  const r=[];
-  if(S.start>0.001)r.push([0,S.start]);
-  if(d-S.end>0.001)r.push([S.end,d]);
-  return r;
+  let r=[[0,d]];
+  for(const x of S.removed)r=subtractRange(r,x[0],x[1]);
+  r=S.mode==='keep'?intersectRange(r,S.start,S.end):subtractRange(r,S.start,S.end);
+  return r.filter(x=>x[1]-x[0]>EPS);
 }
-function outLen(){return segs().reduce((a,s)=>a+s[1]-s[0],0);}
+function outLen(){return sumLen(segs());}
 function setStart(t){S.start=clamp(t,0,S.end-MIN_SEL);S.peak=null;}
 function setEnd(t){S.end=clamp(t,S.start+MIN_SEL,S.buf.duration);S.peak=null;}
+function refresh(){updateUI();updateVol(true);updateParts();}
 function selChanged(){
   if(S.playing){const p=S.ph;play(p);}
-  updateUI();
-  updateVol(true);
+  refresh();
+}
+
+/* ---------- отмена / возврат ---------- */
+const snap=()=>({start:S.start,end:S.end,mode:S.mode,removed:S.removed.map(r=>r.slice()),marks:S.marks.slice()});
+function pushSnap(s){S.undo.push(s);if(S.undo.length>60)S.undo.shift();S.redo=[];updateHist();}
+function pushUndo(){pushSnap(snap());}
+function syncMode(){document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('on',x.dataset.mode===S.mode));}
+function restore(s){
+  S.start=s.start;S.end=s.end;S.mode=s.mode;
+  S.removed=s.removed.map(r=>r.slice());S.marks=s.marks.slice();
+  syncMode();S.peak=null;
+  if(S.playing)play(S.ph);
+  refresh();
+}
+function undo(){if(!S.undo.length)return;S.redo.push(snap());restore(S.undo.pop());updateHist();}
+function redo(){if(!S.redo.length)return;S.undo.push(snap());restore(S.redo.pop());updateHist();}
+function updateHist(){$('btnUndo').disabled=!S.undo.length;$('btnRedo').disabled=!S.redo.length;}
+
+/* применить выделение к дорожке: вырезанное исчезает, выделение сбрасывается */
+function applyEdit(){
+  if(!S.buf)return;
+  const d=S.buf.duration;
+  const add=mergeRanges(S.mode==='keep'?[[0,S.start],[S.end,d]]:[[S.start,S.end]]);
+  if(!add.length){toast('Выделение занимает всю дорожку, применять нечего.');return;}
+  const nr=mergeRanges(S.removed.concat(add));
+  let rest=[[0,d]];
+  for(const x of nr)rest=subtractRange(rest,x[0],x[1]);
+  if(sumLen(rest)<MIN_SEL){toast('Так ничего не останется. Измени выделение.');return;}
+  pushUndo();
+  S.removed=nr;
+  S.marks=S.marks.filter(m=>!nr.some(r=>m>r[0]&&m<r[1]));
+  S.start=0;S.end=d;S.mode='keep';syncMode();S.peak=null;
+  if(S.playing)play(S.ph);
+  refresh();
+  toast('Применено. Выдели следующий кусок. Отмена: ↶');
+}
+
+/* ---------- флажки (маркеры разреза) ---------- */
+function addMark(t){
+  if(!S.buf)return;
+  t=clamp(t,0,S.buf.duration);
+  if(S.marks.some(m=>Math.abs(m-t)<0.02)){toast('Здесь уже есть флажок.');return;}
+  pushUndo();
+  S.marks.push(t);S.marks.sort((a,b)=>a-b);
+  updateParts();updateUI();
+}
+function partsList(){
+  const sg=segs(),d=S.buf.duration;
+  const b=[0].concat(S.marks.filter(m=>m>0&&m<d).sort((x,y)=>x-y),[d]);
+  const out=[];
+  for(let i=0;i<b.length-1;i++){
+    const r=intersectRange(sg,b[i],b[i+1]);
+    if(sumLen(r)>=0.05)out.push(r);
+  }
+  return out;
+}
+function updateParts(){
+  if(!S.buf)return;
+  S.marks.sort((a,b)=>a-b);
+  const box=$('chips');
+  box.textContent='';
+  S.marks.forEach((m,i)=>{
+    const c=document.createElement('span');c.className='chip';
+    const g=document.createElement('button');
+    g.textContent='⚑ '+(i+1)+' · '+fmt(m);
+    g.setAttribute('aria-label','Перейти к флажку '+(i+1));
+    const x=document.createElement('button');
+    x.className='x';x.textContent='✕';
+    x.setAttribute('aria-label','Удалить флажок '+(i+1));
+    c.appendChild(g);c.appendChild(x);box.appendChild(c);
+  });
+  const no=!S.marks.length;
+  if(no&&S.split==='parts')S.split='one';
+  $('partsInfo').textContent=no?'Флажков нет':'Флажков: '+S.marks.length+' · файлов получится: '+partsList().length;
+  $('btnClearMarks').hidden=no;
+  $('splitParts').disabled=no;
+  document.querySelectorAll('[data-split]').forEach(x=>x.classList.toggle('on',x.dataset.split===S.split));
+  $('btnExport').textContent=S.split==='parts'?'Разрезать и скачать zip':'Обрезать и сохранить';
+}
+function ensureVisible(t){
+  if(t<S.vs||t>S.vs+S.vd){S.vs=t-S.vd/2;clampView();}
+}
+
+/* ---------- поиск пауз ---------- */
+function getLevels(){
+  if(S.levels)return S.levels;
+  const sr=S.buf.sampleRate,win=Math.max(1,Math.round(sr*0.01));
+  const n=Math.floor(S.mono.length/win);
+  const L=new Float32Array(n);
+  for(let k=0;k<n;k++){
+    let s=0;const o=k*win;
+    for(let i=0;i<win;i++){const v=S.mono[o+i];s+=v*v;}
+    L[k]=10*Math.log10(s/win+1e-10);
+  }
+  S.levels={L,win:win/sr};
+  return S.levels;
+}
+function loudLevel(L,lo,hi){
+  const a=Array.from(L.subarray(lo,hi)).sort((x,y)=>x-y);
+  return a.length?a[Math.floor(a.length*0.95)]:-100;
+}
+function findPauseMarks(){
+  const lv=getLevels(),L=lv.L,win=lv.win;
+  const keep=S.mode==='keep';
+  const lo=keep?Math.floor(S.start/win):0;
+  const hi=keep?Math.min(L.length,Math.ceil(S.end/win)):L.length;
+  if(hi-lo<10)return[];
+  const thr=loudLevel(L,lo,hi)-S.thr;
+  const minW=Math.max(1,Math.round(S.minPause/win));
+  const res=[];
+  let k=lo;
+  while(k<hi){
+    if(L[k]<thr){
+      let j=k;
+      while(j<hi&&L[j]<thr)j++;
+      // только внутренние паузы: тишина в самом начале и конце маркеров не получает
+      if(j-k>=minW&&k>lo&&j<hi){
+        const t=(k+j)/2*win;
+        if(!inRemoved(t))res.push(t);
+      }
+      k=j;
+    }else k++;
+  }
+  return res;
+}
+function trimEdges(){
+  const lv=getLevels(),L=lv.L,win=lv.win,d=S.buf.duration;
+  const thr=loudLevel(L,0,L.length)-S.thr;
+  let first=-1,last=-1;
+  for(let k=0;k<L.length;k++)if(L[k]>=thr){if(first<0)first=k;last=k;}
+  if(first<0){toast('Не нашёл звука выше порога.');return;}
+  const a=Math.max(0,first*win-0.1),b=Math.min(d,(last+1)*win+0.2);
+  if(a<0.02&&d-b<0.02){toast('По краям тишины нет.');return;}
+  if(b-a<MIN_SEL)return;
+  pushUndo();
+  S.start=a;S.end=b;S.mode='keep';syncMode();S.peak=null;
+  selChanged();
+  toast('Убрано в начале: '+a.toFixed(1).replace('.',',')+' с, в конце: '+(d-b).toFixed(1).replace('.',',')+' с');
 }
 
 /* ---------- громкость ---------- */
@@ -385,6 +603,16 @@ function zoomBy(k,center){
   clampView();
   updateUI();
 }
+let hatch=null;
+function getHatch(g){
+  if(hatch)return hatch;
+  const c=document.createElement('canvas');c.width=c.height=8;
+  const x=c.getContext('2d');
+  x.strokeStyle='rgba(255,93,108,.55)';x.lineWidth=1.5;
+  x.beginPath();x.moveTo(-2,10);x.lineTo(10,-2);x.stroke();
+  hatch=g.createPattern(c,'repeat');
+  return hatch;
+}
 function draw(){
   const w=cv.clientWidth,h=cv.clientHeight;
   if(!w)return;
@@ -415,6 +643,25 @@ function draw(){
   }
   g.fillStyle='rgba(255,255,255,.12)';
   g.fillRect(PAD,mid,w-2*PAD,1);
+  // вырезанные куски: затемнение и штриховка
+  for(const r of S.removed){
+    const x0=Math.max(PAD,X(r[0])),x1=Math.min(w-PAD,X(r[1]));
+    if(x1>x0){
+      g.fillStyle='rgba(15,17,21,.72)';g.fillRect(x0,0,x1-x0,h);
+      g.fillStyle=getHatch(g);g.fillRect(x0,0,x1-x0,h);
+    }
+  }
+  // флажки
+  g.font='bold 10px system-ui,sans-serif';g.textAlign='center';g.textBaseline='middle';
+  S.marks.forEach((m,i)=>{
+    const x=X(m);
+    if(x<PAD-1||x>w-PAD+1)return;
+    g.fillStyle='#ffd166';
+    g.fillRect(x-0.75,0,1.5,h);
+    g.fillRect(x-9,0,18,14);
+    g.fillStyle='#1a1d24';
+    g.fillText(String(i+1),x,7.5);
+  });
   const handle=(x,col)=>{
     if(x<PAD-1||x>w-PAD+1)return;
     g.fillStyle=col;g.fillRect(x-1.5,0,3,h);
@@ -443,52 +690,97 @@ function updateUI(){
 }
 
 /* ---------- жесты на волне ---------- */
-let drag=null;
+let drag=null,pinch=null;
+const ptrs=new Map();
 cv.addEventListener('pointerdown',e=>{
   if(!S.buf)return;
   const r=cv.getBoundingClientRect(),x=e.clientX-r.left,w=r.width;
-  const xs=tx(S.start,w),xe=tx(S.end,w);
-  let kind='bg',hx=0;
-  const ds=Math.abs(x-xs),de=Math.abs(x-xe);
-  const hit=e.pointerType==='mouse'?16:HIT; // мышь точнее пальца
-  if(Math.min(ds,de)<hit){
-    if(Math.abs(xe-xs)<hit)kind=x<(xs+xe)/2?'s':'e'; // ручки рядом: выбираем по стороне касания
-    else kind=ds<=de?'s':'e';
-    hx=(kind==='s'?xs:xe)-x; // смещение пальца от центра ручки, чтобы ручка не прыгала
-  }
-  drag={kind,x0:x,vs0:S.vs,hx,moved:false};
+  ptrs.set(e.pointerId,e.clientX);
   try{cv.setPointerCapture(e.pointerId);}catch(err){}
   e.preventDefault();
+  if(ptrs.size>=2){ // второй палец: масштаб щипком
+    drag=null;
+    const xs=Array.from(ptrs.values());
+    pinch={d0:Math.max(24,Math.abs(xs[0]-xs[1])),vd0:S.vd,tc:xt((xs[0]+xs[1])/2-r.left,w)};
+    return;
+  }
+  const xs=tx(S.start,w),xe=tx(S.end,w);
+  const hit=e.pointerType==='mouse'?16:HIT; // мышь точнее пальца
+  let kind='bg',idx=-1,best=hit,hx=0;
+  const cands=[['s',xs,-1],['e',xe,-1]];
+  S.marks.forEach((m,i)=>cands.push(['m',tx(m,w),i]));
+  for(const c of cands){ // ручки идут первыми и выигрывают при равенстве
+    const dd=Math.abs(x-c[1]);
+    if(dd<best){best=dd;kind=c[0];idx=c[2];hx=c[1]-x;}
+  }
+  if((kind==='s'||kind==='e')&&Math.abs(xe-xs)<hit){ // ручки рядом: выбираем по стороне касания
+    kind=x<(xs+xe)/2?'s':'e';
+    hx=(kind==='s'?xs:xe)-x;
+  }
+  // hx: смещение пальца от центра ручки, чтобы ручка не прыгала
+  drag={kind,idx,x0:x,vs0:S.vs,hx,moved:false,pre:snap()};
 });
 cv.addEventListener('pointermove',e=>{
   const r=cv.getBoundingClientRect(),x=e.clientX-r.left,w=r.width;
+  if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,e.clientX);
+  if(pinch&&ptrs.size>=2){
+    const xs=Array.from(ptrs.values());
+    const dist=Math.max(24,Math.abs(xs[0]-xs[1]));
+    const cx=(xs[0]+xs[1])/2-r.left;
+    S.vd=pinch.vd0*pinch.d0/dist;
+    clampView();
+    S.vs=pinch.tc-(cx-PAD)/(w-2*PAD)*S.vd; // точка под пальцами остаётся на месте
+    clampView();
+    updateUI();
+    return;
+  }
   if(!drag){
-    if(e.pointerType==='mouse'&&S.buf){ // курсор-подсказка над ручками
-      const near=Math.min(Math.abs(x-tx(S.start,w)),Math.abs(x-tx(S.end,w)))<16;
+    if(e.pointerType==='mouse'&&S.buf){ // курсор-подсказка над ручками и флажками
+      let near=Math.min(Math.abs(x-tx(S.start,w)),Math.abs(x-tx(S.end,w)))<16;
+      if(!near)near=S.marks.some(m=>Math.abs(x-tx(m,w))<16);
       cv.style.cursor=near?'ew-resize':'pointer';
     }
     return;
   }
   if(Math.abs(x-drag.x0)>5)drag.moved=true;
-  if(drag.kind==='s'){setStart(xt(x+drag.hx,w));updateUI();}
-  else if(drag.kind==='e'){setEnd(xt(x+drag.hx,w));updateUI();}
+  const t=xt(x+drag.hx,w);
+  if(drag.kind==='s'){setStart(t);updateUI();}
+  else if(drag.kind==='e'){setEnd(t);updateUI();}
+  else if(drag.kind==='m'){S.marks[drag.idx]=clamp(t,0,S.buf.duration);updateUI();}
   else if(drag.moved){S.vs=drag.vs0-(x-drag.x0)/(w-2*PAD)*S.vd;updateUI();}
 });
-function endDrag(e){
+function endDrag(e,cancel){
   if(!drag)return;
   const d=drag;drag=null;
-  if(d.kind==='bg'&&!d.moved){
-    const r=cv.getBoundingClientRect(),x=e.clientX-r.left;
-    S.ph=clamp(xt(x,r.width),0,S.buf.duration);
-    if(S.playing)play(S.ph);
-    updateUI();
-  }else if(d.kind!=='bg'){
-    if(S.playing)play(S.ph);
-    updateVol(true);
+  if(d.kind==='bg'){
+    if(!d.moved&&!cancel){
+      const r=cv.getBoundingClientRect(),x=e.clientX-r.left;
+      S.ph=clamp(xt(x,r.width),0,S.buf.duration);
+      if(S.playing)play(S.ph);
+      updateUI();
+    }
+    return;
   }
+  // ручка или флажок: в историю попадает только реальное изменение
+  const p=d.pre;
+  const changed=p.start!==S.start||p.end!==S.end||p.marks.length!==S.marks.length||p.marks.some((m,i)=>m!==S.marks[i]);
+  if(changed)pushSnap(p);
+  if(d.kind==='m')S.marks.sort((a,b)=>a-b);
+  if(S.playing)play(S.ph);
+  updateVol(true);updateParts();updateUI();
 }
-cv.addEventListener('pointerup',endDrag);
-cv.addEventListener('pointercancel',()=>{drag=null;});
+function onUp(e,cancel){
+  ptrs.delete(e.pointerId);
+  if(pinch){
+    if(ptrs.size<2)pinch=null;
+    drag=null; // оставшийся палец после щипка не должен ставить маркер
+    return;
+  }
+  endDrag(e,cancel);
+}
+cv.addEventListener('pointerup',e=>onUp(e,false));
+cv.addEventListener('pointercancel',e=>onUp(e,true));
+cv.addEventListener('lostpointercapture',e=>{ptrs.delete(e.pointerId);});
 cv.addEventListener('wheel',e=>{
   if(!S.buf)return;
   e.preventDefault();
@@ -506,17 +798,26 @@ else window.addEventListener('resize',()=>{if(S.buf)draw();});
 
 /* клавиатура (ноутбук) */
 document.addEventListener('keydown',e=>{
-  if(!S.buf||e.ctrlKey||e.metaKey||e.altKey)return;
+  if(!S.buf)return;
   const t=e.target,tag=t&&t.tagName,type=t&&t.type;
-  if(tag==='SELECT'||tag==='TEXTAREA'||(tag==='INPUT'&&type==='text'))return;
+  const typing=tag==='SELECT'||tag==='TEXTAREA'||(tag==='INPUT'&&type==='text');
+  if((e.ctrlKey||e.metaKey)&&!e.altKey&&(e.code==='KeyZ'||e.code==='KeyY')){
+    if(typing)return;
+    e.preventDefault();
+    if(e.code==='KeyY'||e.shiftKey)redo();else undo();
+    return;
+  }
+  if(e.ctrlKey||e.metaKey||e.altKey||typing)return;
   if(e.code==='Space'){
     if(tag==='BUTTON'||tag==='A')return; // пробел на кнопке нажимает её сам
     e.preventDefault();
     if(S.playing)pause();else play();
   }else if(e.key==='i'||e.key==='I'||e.key==='ш'||e.key==='Ш'){
-    setStart(S.ph);selChanged();
+    pushUndo();setStart(S.ph);selChanged();
   }else if(e.key==='o'||e.key==='O'||e.key==='щ'||e.key==='Щ'){
-    setEnd(S.ph);selChanged();
+    pushUndo();setEnd(S.ph);selChanged();
+  }else if(e.key==='m'||e.key==='M'||e.key==='ь'||e.key==='Ь'){
+    addMark(S.ph);
   }else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&!(tag==='INPUT'&&type==='range')){
     e.preventDefault();
     const d=(e.key==='ArrowLeft'?-1:1)*(e.shiftKey?0.1:1);
@@ -541,14 +842,15 @@ function play(fromTime){
   teardown();
   const sg=segs();
   if(!sg.length){S.playing=false;setPlayBtn();return;}
-  const total=sg.reduce((a,s)=>a+s[1]-s[0],0);
+  const total=sumLen(sg);
   const ph=fromTime==null?S.ph:fromTime;
-  let off=0,acc=0;
+  // позиция в склеенном результате; если маркер в вырезанном месте, играем со следующего куска
+  let off=null,acc=0;
   for(const s of sg){
-    if(ph>=s[0]&&ph<s[1]){off=acc+(ph-s[0]);break;}
+    if(ph<s[1]){off=acc+Math.max(0,ph-s[0]);break;}
     acc+=s[1]-s[0];
   }
-  if(off>total-0.05)off=0;
+  if(off==null||off>total-0.05)off=0;
   const volNode=ctx.createGain();
   volNode.gain.value=dbToGain(S.volDb);
   volNode.connect(ctx.destination);
@@ -619,9 +921,8 @@ function setPlayBtn(){
 }
 
 /* ---------- экспорт ---------- */
-function renderChannels(){
+function renderChannels(sg){
   const b=S.buf,sr=b.sampleRate;
-  const sg=segs();
   let n=0;
   const idx=sg.map(s=>{
     const a=Math.floor(s[0]*sr),z=Math.min(b.length,Math.floor(s[1]*sr));
@@ -634,6 +935,16 @@ function renderChannels(){
     let p=0;
     for(const r of idx){out.set(src.subarray(r[0],r[1]),p);p+=r[1]-r[0];}
     chs.push(out);
+  }
+  // стыки склеенных кусков: короткое затухание/нарастание (4 мс), чтобы не было щелчка
+  if(idx.length>1){
+    let p=0;
+    for(let i=0;i<idx.length-1;i++){
+      const lenA=idx[i][1]-idx[i][0],lenB=idx[i+1][1]-idx[i+1][0];
+      p+=lenA;
+      const k=Math.min(Math.floor(0.004*sr),Math.floor(lenA/2),Math.floor(lenB/2));
+      for(const out of chs)for(let j=0;j<k;j++){out[p-1-j]*=j/k;out[p+j]*=j/k;}
+    }
   }
   const fi=Math.min(Math.floor(S.fadeIn*sr),Math.floor(n/2)),fo=Math.min(Math.floor(S.fadeOut*sr),Math.floor(n/2));
   for(const out of chs){
@@ -686,7 +997,7 @@ function progress(p){
   $('bar').hidden=false;
   $('barI').style.width=Math.round(clamp(p,0,1)*100)+'%';
 }
-async function encodeMp3(chs,sr,kbps){
+async function encodeMp3(chs,sr,kbps,onp){
   await loadLame();
   if(MP3_RATES.indexOf(sr)<0){const r=await resample(chs,sr,44100);chs=r.chs;sr=r.sr;}
   const ch=Math.min(2,chs.length);
@@ -703,17 +1014,60 @@ async function encodeMp3(chs,sr,kbps){
     const l=L.subarray(i,i+blk);
     const d=ch>1?enc.encodeBuffer(l,R.subarray(i,i+blk)):enc.encodeBuffer(l);
     if(d.length)parts.push(new Uint8Array(d));
-    if(k%40===0){progress(i/L.length);await new Promise(r=>setTimeout(r));}
+    if(k%40===0){onp(i/L.length);await new Promise(r=>setTimeout(r));}
   }
   const f=enc.flush();
   if(f.length)parts.push(new Uint8Array(f));
   return new Blob(parts,{type:'audio/mpeg'});
 }
+
+/* простой zip без сжатия (аудио уже сжато) */
+let crcTab=null;
+function crc32(u8){
+  if(!crcTab){
+    crcTab=new Uint32Array(256);
+    for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;crcTab[n]=c>>>0;}
+  }
+  let c=0xFFFFFFFF;
+  for(let i=0;i<u8.length;i++)c=crcTab[(c^u8[i])&255]^(c>>>8);
+  return (c^0xFFFFFFFF)>>>0;
+}
+function makeZip(files){
+  const te=new TextEncoder(),now=new Date();
+  const dosTime=(now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1);
+  const dosDate=((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate();
+  const chunks=[],central=[];
+  let offset=0,cdSize=0;
+  for(const f of files){
+    const nm=te.encode(f.name),crc=crc32(f.data),size=f.data.length;
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true);lh.setUint16(4,20,true);lh.setUint16(6,0x0800,true);lh.setUint16(8,0,true);
+    lh.setUint16(10,dosTime,true);lh.setUint16(12,dosDate,true);lh.setUint32(14,crc,true);
+    lh.setUint32(18,size,true);lh.setUint32(22,size,true);lh.setUint16(26,nm.length,true);lh.setUint16(28,0,true);
+    chunks.push(new Uint8Array(lh.buffer),nm,f.data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);ch.setUint16(8,0x0800,true);ch.setUint16(10,0,true);
+    ch.setUint16(12,dosTime,true);ch.setUint16(14,dosDate,true);ch.setUint32(16,crc,true);
+    ch.setUint32(20,size,true);ch.setUint32(24,size,true);ch.setUint16(28,nm.length,true);
+    ch.setUint16(30,0,true);ch.setUint16(32,0,true);ch.setUint16(34,0,true);ch.setUint16(36,0,true);ch.setUint32(38,0,true);
+    ch.setUint32(42,offset,true);
+    central.push(new Uint8Array(ch.buffer),nm);
+    offset+=30+nm.length+size;
+    cdSize+=46+nm.length;
+  }
+  const end=new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true);end.setUint16(4,0,true);end.setUint16(6,0,true);
+  end.setUint16(8,files.length,true);end.setUint16(10,files.length,true);
+  end.setUint32(12,cdSize,true);end.setUint32(16,offset,true);end.setUint16(20,0,true);
+  return new Blob(chunks.concat(central,[new Uint8Array(end.buffer)]),{type:'application/zip'});
+}
+
 function clearResult(){
   if(S.resUrl){URL.revokeObjectURL(S.resUrl);S.resUrl=null;}
   S.resFile=null;
   $('result').hidden=true;
   $('resAudio').removeAttribute('src');
+  $('resAudio').hidden=false;
   $('bar').hidden=true;
 }
 async function doExport(){
@@ -721,25 +1075,47 @@ async function doExport(){
   pause();
   clearResult();
   const btn=$('btnExport');
+  const parts=(S.split==='parts'&&S.marks.length)?partsList():[segs()];
+  const N=parts.length;
+  if(!N){toast('Нет частей для сохранения.');return;}
   btn.disabled=true;
   msg('Обрезаю…');
   progress(0);
   await new Promise(r=>setTimeout(r,30));
   try{
-    const r=renderChannels();
-    let blob,ext;
-    if(S.fmt==='mp3'){
-      msg('Кодирую MP3…');
-      blob=await encodeMp3(r.chs,r.sr,parseInt($('kbps').value,10));ext='mp3';
-    }else{
-      blob=encodeWav(r.chs,r.sr);ext='wav';
+    const kbps=parseInt($('kbps').value,10);
+    const files=[];
+    for(let i=0;i<N;i++){
+      const r=renderChannels(parts[i]);
+      let blob,ext;
+      if(S.fmt==='mp3'){
+        msg(N>1?'Кодирую MP3: '+(i+1)+' из '+N+'…':'Кодирую MP3…');
+        blob=await encodeMp3(r.chs,r.sr,kbps,f=>progress((i+f)/N));ext='mp3';
+      }else{
+        blob=encodeWav(r.chs,r.sr);ext='wav';
+        progress((i+1)/N);
+        await new Promise(rr=>setTimeout(rr));
+      }
+      files.push({blob,dur:r.n/r.sr,name:N>1?S.name+'_'+pad2(i+1)+'.'+ext:S.name+'_cut.'+ext});
     }
-    const fname=S.name+'_cut.'+ext;
+    let blob,fname,info;
+    if(N===1){
+      blob=files[0].blob;fname=files[0].name;
+      info=fname+' · '+fmt(files[0].dur)+' · '+fmtSize(blob.size);
+    }else{
+      msg('Собираю zip…');
+      const items=[];
+      for(const f of files)items.push({name:f.name,data:new Uint8Array(await f.blob.arrayBuffer())});
+      blob=makeZip(items);
+      fname=S.name+'_parts.zip';
+      info=fname+' · '+N+' файлов · '+fmtSize(blob.size)+'\n'+files.map(f=>f.name+' · '+fmt(f.dur)).join('\n');
+    }
     S.resUrl=URL.createObjectURL(blob);
     S.resFile=new File([blob],fname,{type:blob.type});
-    $('resAudio').src=S.resUrl;
+    const au=$('resAudio');
+    if(N===1){au.hidden=false;au.src=S.resUrl;}else{au.hidden=true;au.removeAttribute('src');}
     const dl=$('resDl');dl.href=S.resUrl;dl.download=fname;
-    $('resInfo').textContent=fname+' · '+fmt(r.n/r.sr)+' · '+fmtSize(blob.size);
+    $('resInfo').textContent=info;
     const canShare=!!(navigator.canShare&&navigator.canShare({files:[S.resFile]}));
     $('resShare').hidden=!canShare;
     $('result').hidden=false;
@@ -762,6 +1138,9 @@ window.addEventListener('drop',e=>{const f=e.dataTransfer&&e.dataTransfer.files[
 
 $('btnPlay').addEventListener('click',()=>{if(S.playing)pause();else play();});
 $('btnLoop').addEventListener('click',()=>{S.loop=!S.loop;$('btnLoop').classList.toggle('on',S.loop);});
+$('btnUndo').addEventListener('click',undo);
+$('btnRedo').addEventListener('click',redo);
+$('btnMark').addEventListener('click',()=>addMark(S.ph));
 
 $('zIn').addEventListener('click',()=>zoomBy(0.5));
 $('zOut').addEventListener('click',()=>zoomBy(2));
@@ -780,7 +1159,10 @@ $('pan').addEventListener('input',e=>{
 function commitTime(which){
   const inp=$(which==='s'?'inStart':'inEnd');
   const v=parseT(inp.value);
-  if(v!==null){if(which==='s')setStart(v);else setEnd(v);}
+  if(v!==null){
+    pushUndo();
+    if(which==='s')setStart(v);else setEnd(v);
+  }
   inp.value='';
   selChanged();
 }
@@ -793,20 +1175,71 @@ function commitTime(which){
 document.querySelectorAll('.nudge button').forEach(b=>{
   b.addEventListener('click',()=>{
     const d=parseFloat(b.dataset.d);
+    pushUndo();
     if(b.dataset.t==='s')setStart(S.start+d);else setEnd(S.end+d);
     selChanged();
   });
 });
-$('setS').addEventListener('click',()=>{setStart(S.ph);selChanged();});
-$('setE').addEventListener('click',()=>{setEnd(S.ph);selChanged();});
+$('setS').addEventListener('click',()=>{pushUndo();setStart(S.ph);selChanged();});
+$('setE').addEventListener('click',()=>{pushUndo();setEnd(S.ph);selChanged();});
 
 document.querySelectorAll('[data-mode]').forEach(b=>{
   b.addEventListener('click',()=>{
+    if(S.mode!==b.dataset.mode)pushUndo();
     S.mode=b.dataset.mode;
-    document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('on',x===b));
+    syncMode();
     selChanged();
   });
 });
+$('btnApply').addEventListener('click',applyEdit);
+
+/* флажки и паузы */
+$('chips').addEventListener('click',e=>{
+  const b=e.target.closest('button');
+  if(!b)return;
+  const i=Array.prototype.indexOf.call($('chips').children,b.parentElement);
+  if(i<0)return;
+  if(b.classList.contains('x')){
+    pushUndo();S.marks.splice(i,1);
+    updateParts();updateUI();
+  }else{
+    S.ph=S.marks[i];ensureVisible(S.ph);
+    if(S.playing)play(S.ph);
+    updateUI();
+  }
+});
+$('btnClearMarks').addEventListener('click',()=>{
+  if(!S.marks.length)return;
+  pushUndo();S.marks=[];
+  updateParts();updateUI();
+});
+$('btnFind').addEventListener('click',()=>{
+  if(!S.buf)return;
+  const found=findPauseMarks();
+  if(!found.length){toast('Пауз не нашёл. Уменьши порог тишины или минимальную паузу в настройках.');return;}
+  pushUndo();S.marks=found;
+  updateParts();updateUI();
+  toast('Найдено пауз: '+found.length+'. Проверь флажки, лишние убери кнопкой ✕.');
+});
+$('btnTrimEdges').addEventListener('click',()=>{if(S.buf)trimEdges();});
+function bindThr(){
+  const t=$('thr'),m=$('minPause');
+  const lab=()=>{
+    $('thrV').textContent='−'+S.thr+' дБ';
+    $('minPauseV').textContent=String(S.minPause).replace('.',',')+' с';
+  };
+  t.addEventListener('input',()=>{S.thr=parseFloat(t.value);store('thr',S.thr);lab();});
+  m.addEventListener('input',()=>{S.minPause=parseFloat(m.value);store('minPause',S.minPause);lab();});
+  const a=parseFloat(load('thr')),b=parseFloat(load('minPause'));
+  if(a>=15&&a<=50){S.thr=a;t.value=a;}
+  if(b>=0.1&&b<=2){S.minPause=b;m.value=b;}
+  lab();
+}
+bindThr();
+document.querySelectorAll('[data-split]').forEach(b=>{
+  b.addEventListener('click',()=>{S.split=b.dataset.split;updateParts();});
+});
+
 function bindFade(id,key,vid){
   const el=$(id);
   el.addEventListener('input',()=>{
